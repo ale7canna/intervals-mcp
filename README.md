@@ -128,9 +128,13 @@ Sopra ci va il "personaggio", che è per-client:
 - **Claude Code** — `.claude/agents/coach.md`, subagent con `model: opus`.
 
 Entrambi definiscono un coach che prende l'iniziativa: legge form, storico e calendario da sé,
-propone la settimana con il motivo di ogni seduta, e scrive sul calendario solo dopo conferma.
-Il contesto durevole (rientro da infortunio, caldo, carico calcolato da HR per scelta, soglia di
-passo ancora da verificare) è nel prompt; i numeri li rilegge ogni volta dai tool.
+propone con il motivo di ogni seduta, e scrive sul calendario solo dopo conferma.
+
+**Nessun vincolo di metodo, per scelta.** I prompt contengono solo ciò che l'agent non può dedurre
+— i fatti sull'atleta (rientro da infortunio, caldo, carico calcolato da HR per scelta, soglia di
+passo non verificata), le regole tecniche di scrittura e il limite di sicurezza sul dolore. Volumi,
+intensità e progressione le decide l'agent, e se gli serve un vincolo lo chiede. I numeri li
+rilegge ogni volta dai tool, così non invecchiano nel prompt.
 
 Modello: Opus per pianificare e analizzare, Sonnet per le domande di tutti i giorni.
 
