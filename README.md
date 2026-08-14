@@ -113,6 +113,27 @@ client_id da richiedere a david@intervals.icu.
 `npm test` copre i casi di autenticazione (token valido/errato/assente, le varie vie, rotta non
 confusa per token).
 
+## Il coach
+
+Le regole operative (soglie da verificare prima di scrivere, sintassi, conferma prima di scrivere
+in calendario) stanno nelle `instructions` del server in `src/server.ts`: vengono inviate a
+**qualunque** client all'`initialize`, quindi valgono anche da claude.ai e dal telefono senza
+ripeterle da nessuna parte.
+
+Sopra ci va il "personaggio", che è per-client:
+
+- **claude.ai** — crea un Project, attiva il connector e incolla nelle istruzioni il contenuto di
+  [`docs/coach-project-instructions.md`](docs/coach-project-instructions.md). È in italiano perché
+  fissa anche la lingua delle risposte.
+- **Claude Code** — `.claude/agents/coach.md`, subagent con `model: opus`.
+
+Entrambi definiscono un coach che prende l'iniziativa: legge form, storico e calendario da sé,
+propone la settimana con il motivo di ogni seduta, e scrive sul calendario solo dopo conferma.
+Il contesto durevole (rientro da infortunio, caldo, carico calcolato da HR per scelta, soglia di
+passo ancora da verificare) è nel prompt; i numeri li rilegge ogni volta dai tool.
+
+Modello: Opus per pianificare e analizzare, Sonnet per le domande di tutti i giorni.
+
 ## Tool disponibili
 
 ### Lettura
