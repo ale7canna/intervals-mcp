@@ -59,12 +59,25 @@ modalità **stateless** (server e transport costruiti per richiesta, `enableJson
 che funziona su serverless, senza Redis né sessioni in memoria. Nessun framework: niente Next.js,
 solo la function e l'SDK ufficiale.
 
+Non serve creare nulla dalla dashboard: `vercel link` crea il progetto. L'ordine conta, perché
+`env add` funziona solo su una directory già linkata.
+
 ```bash
-npm run token       # genera un segreto da 32 byte base64url
+npm i -g vercel
+vercel login
+vercel link                                  # crea/collega il progetto (scrive .vercel/, gitignorato)
+npm run token                                # genera il segreto, copialo
 vercel env add MCP_AUTH_TOKEN production
 vercel env add INTERVALS_API_KEY production
-vercel --prod
+vercel --prod                                # primo deploy
 ```
+
+Se vuoi che funzionino anche i deploy di preview, ripeti gli `env add` per `preview`: le variabili
+sono per-ambiente, e un preview senza di esse risponde 500.
+
+`vercel.json` dichiara `outputDirectory: "public"` con una pagina statica minima: senza una
+directory di output, un progetto con un `buildCommand` fa fallire il build
+("No Output Directory named 'public' found").
 
 Env var richieste sul server: `INTERVALS_API_KEY`, `MCP_AUTH_TOKEN`, opzionale
 `INTERVALS_ATHLETE_ID`. **La API key di intervals.icu resta lato server**: nel client finisce solo
