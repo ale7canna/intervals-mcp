@@ -10,7 +10,7 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "exactOptionalPropertyTypes": false,
-    "declaration": false,
+    "declaration": true,
     "sourceMap": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,

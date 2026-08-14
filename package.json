@@ -1,6 +1,6 @@
 {
   "name": "intervals-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "MCP server for intervals.icu — read training data and create structured workouts that sync to Garmin",
   "type": "module",
@@ -12,9 +12,11 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.check.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.check.json",
+    "test": "tsx --test test/*.test.ts",
     "dev": "tsx src/index.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "token": "node scripts/gen-token.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
