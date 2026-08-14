@@ -7,7 +7,7 @@ to the athlete's watch (Garmin Forerunner is the target device here).
 ## Commands
 
 ```bash
-npm run build       # tsc -> dist/ (dist/index.js is the stdio entrypoint)
+npm run build       # tsc -> dist/ (dist/stdio.js is the stdio entrypoint)
 npm run typecheck   # builds first, then checks src + scripts + test + api
 npm test            # node:test via tsx — currently the HTTP auth logic
 npm run dev         # run from source with tsx
@@ -17,7 +17,7 @@ npm run smoke -- --write   # also create/verify/delete a test workout tomorrow
 python3 scripts/fitdump.py w.fit   # decode a workout FIT and show each step's target
 ```
 
-Registered in Claude Code as the `intervals` MCP server pointing at `dist/index.js`, so
+Registered in Claude Code as the `intervals` MCP server pointing at `dist/stdio.js`, so
 **rebuild after changing `src/`** or the running server keeps the old behaviour.
 
 ## Architecture
@@ -26,8 +26,9 @@ Two transports over one server definition:
 
 - `src/server.ts` — `buildServer(client)`, transport-agnostic: instructions, the
   `intervals://workout-syntax` resource, and all tool registrations. Both entrypoints use it.
-- `src/index.ts` — stdio entrypoint: `.env` loading, then connect. Never write to stdout, that is
-  the protocol channel; logs go to stderr.
+- `src/stdio.ts` — stdio entrypoint: `.env` loading, then connect. Never write to stdout, that is
+  the protocol channel; logs go to stderr. **Do not rename this back to `src/index.ts`** — see
+  gotcha 8.
 - `api/mcp.ts` — Vercel Node function: token auth, then a stateless Streamable HTTP transport
   (`sessionIdGenerator: undefined`, `enableJsonResponse: true`) built per request.
 - `src/auth.ts` — shared-secret check for the HTTP route. Accepts the token from
@@ -39,7 +40,7 @@ Two transports over one server definition:
 - `src/format.ts` — payload shaping. `Activity` has 183 fields and `Athlete` 158, so responses are
   reduced to curated field sets and enriched with readable forms (pace, durations).
 - `src/tools/{athlete,activities,wellness,events}.ts` — each exports `register…Tools(server, client)`.
-  Adding a tool means adding it there and calling the register function from `index.ts`.
+  Adding a tool means adding it there and calling the register function from `server.ts`.
 - `src/workout-syntax.ts` — the workout text format: a compact cheat sheet inlined into tool
   descriptions (so the model always sees it) and a full guide for the resource/tool.
 
@@ -77,7 +78,13 @@ These were all found empirically; don't rediscover them.
    between reps is written.
 6. Absence of `push_errors` is not proof the workout reached the watch, only that nothing failed
    loudly. The definitive check is decoding the FIT (`scripts/fitdump.py`).
-7. **`api/` must import from `../dist/*.js`, not `../src/`.** Vercel bundles the function with
+7. **Vercel auto-detects a Node server from conventional entrypoints.** With the stdio entrypoint
+   at `src/index.ts`, Vercel ignored the `api/` + `public/` layout, deployed that file as a single
+   server function and routed everything to it — every route answered 500
+   (`FUNCTION_INVOCATION_FAILED`) and the build log showed `intervals-mcp ready on stdio` followed
+   by "No exports found in module /var/task/src/index.mjs". Hence `src/stdio.ts`, no `bin` field in
+   `package.json`, and `"framework": null` in `vercel.json`. Keep all three.
+8. **`api/` must import from `../dist/*.js`, not `../src/`.** Vercel bundles the function with
    esbuild, which does not do TypeScript's `.js` → `.ts` resolution, so a `../src/server.js`
    import fails at build time. That is why `tsconfig.json` has `declaration: true` (the `.d.ts`
    files give `api/` its types) and why `typecheck` builds before checking.

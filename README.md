@@ -28,11 +28,11 @@ npm run smoke -- --write # crea un allenamento di test domani, lo verifica e lo 
 ### Registrazione in Claude Code
 
 ```bash
-claude mcp add intervals -- node /percorso/assoluto/intervals-mcp/dist/index.js
+claude mcp add intervals -- node /percorso/assoluto/intervals-mcp/dist/stdio.js
 ```
 
 La key non va nella config del client: il server legge il `.env` accanto al package.
-In alternativa, per tenerla nella config: `claude mcp add intervals --env INTERVALS_API_KEY=... -- node .../dist/index.js`.
+In alternativa, per tenerla nella config: `claude mcp add intervals --env INTERVALS_API_KEY=... -- node .../dist/stdio.js`.
 
 Per Claude Desktop, in `claude_desktop_config.json`:
 
@@ -41,7 +41,7 @@ Per Claude Desktop, in `claude_desktop_config.json`:
   "mcpServers": {
     "intervals": {
       "command": "node",
-      "args": ["/percorso/assoluto/intervals-mcp/dist/index.js"]
+      "args": ["/percorso/assoluto/intervals-mcp/dist/stdio.js"]
     }
   }
 }

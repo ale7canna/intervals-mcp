@@ -4,17 +4,11 @@
   "private": true,
   "description": "MCP server for intervals.icu — read training data and create structured workouts that sync to Garmin",
   "type": "module",
-  "bin": {
-    "intervals-mcp": "dist/index.js"
-  },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.check.json",
     "test": "tsx --test test/*.test.ts",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx src/stdio.ts",
     "smoke": "tsx scripts/smoke.ts",
     "token": "node scripts/gen-token.mjs"
   },
