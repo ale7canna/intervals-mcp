@@ -7,9 +7,11 @@ to the athlete's watch (Garmin Forerunner is the target device here).
 ## Commands
 
 ```bash
-npm run build       # tsc -> dist/ (dist/index.js is the MCP entrypoint)
-npm run typecheck   # src + scripts (tsconfig.check.json)
+npm run build       # tsc -> dist/ (dist/index.js is the stdio entrypoint)
+npm run typecheck   # builds first, then checks src + scripts + test + api
+npm test            # node:test via tsx — currently the HTTP auth logic
 npm run dev         # run from source with tsx
+npm run token       # generate MCP_AUTH_TOKEN for the remote deployment
 npm run smoke              # end-to-end read checks against the real API
 npm run smoke -- --write   # also create/verify/delete a test workout tomorrow
 python3 scripts/fitdump.py w.fit   # decode a workout FIT and show each step's target
@@ -20,8 +22,18 @@ Registered in Claude Code as the `intervals` MCP server pointing at `dist/index.
 
 ## Architecture
 
-- `src/index.ts` — server bootstrap, `.env` loading, MCP instructions, `intervals://workout-syntax`
-  resource. Never write to stdout: stdio is the protocol channel, logs go to stderr.
+Two transports over one server definition:
+
+- `src/server.ts` — `buildServer(client)`, transport-agnostic: instructions, the
+  `intervals://workout-syntax` resource, and all tool registrations. Both entrypoints use it.
+- `src/index.ts` — stdio entrypoint: `.env` loading, then connect. Never write to stdout, that is
+  the protocol channel; logs go to stderr.
+- `api/mcp.ts` — Vercel Node function: token auth, then a stateless Streamable HTTP transport
+  (`sessionIdGenerator: undefined`, `enableJsonResponse: true`) built per request.
+- `src/auth.ts` — shared-secret check for the HTTP route. Accepts the token from
+  `Authorization: Bearer`, `x-api-key`, `x-auth-token`, the path (`/mcp/<token>`) or `?token=`,
+  because MCP clients differ in what they can send. Constant-time compare on SHA-256 digests;
+  refuses to serve at all when `MCP_AUTH_TOKEN` is unset or shorter than 24 chars.
 - `src/client.ts` — HTTP client. Basic auth (username is the literal `API_KEY`), athlete-id
   resolution and caching, error messages that name the likely cause.
 - `src/format.ts` — payload shaping. `Activity` has 183 fields and `Athlete` 158, so responses are
@@ -65,6 +77,10 @@ These were all found empirically; don't rediscover them.
    between reps is written.
 6. Absence of `push_errors` is not proof the workout reached the watch, only that nothing failed
    loudly. The definitive check is decoding the FIT (`scripts/fitdump.py`).
+7. **`api/` must import from `../dist/*.js`, not `../src/`.** Vercel bundles the function with
+   esbuild, which does not do TypeScript's `.js` → `.ts` resolution, so a `../src/server.js`
+   import fails at build time. That is why `tsconfig.json` has `declaration: true` (the `.d.ts`
+   files give `api/` its types) and why `typecheck` builds before checking.
 
 ## Secrets
 

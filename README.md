@@ -49,6 +49,57 @@ Per Claude Desktop, in `claude_desktop_config.json`:
 
 In sviluppo: `npm run dev` (tsx, senza build).
 
+## Deploy remoto su Vercel (opzionale)
+
+Serve solo se vuoi usarlo **senza il Mac acceso** — da claude.ai, dal telefono, o per condividerlo.
+In locale lo stdio resta più semplice e la chiave non si muove dalla tua macchina.
+
+`api/mcp.ts` è una Vercel Node function che espone lo stesso server su Streamable HTTP, in
+modalità **stateless** (server e transport costruiti per richiesta, `enableJsonResponse`): l'unica
+che funziona su serverless, senza Redis né sessioni in memoria. Nessun framework: niente Next.js,
+solo la function e l'SDK ufficiale.
+
+```bash
+npm run token       # genera un segreto da 32 byte base64url
+vercel env add MCP_AUTH_TOKEN production
+vercel env add INTERVALS_API_KEY production
+vercel --prod
+```
+
+Env var richieste sul server: `INTERVALS_API_KEY`, `MCP_AUTH_TOKEN`, opzionale
+`INTERVALS_ATHLETE_ID`. **La API key di intervals.icu resta lato server**: nel client finisce solo
+il token.
+
+### Due modi per autenticarsi, perché i client differiscono
+
+```bash
+# Claude Code: header custom (supportati)
+claude mcp add --transport http intervals-remote https://<deploy>/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Per i client che non mandano header custom — su claude.ai l'auth via request header esiste ma è in
+beta/rollout — il token va nel path, che è solo un URL:
+
+```
+https://<deploy>/mcp/<token>
+```
+
+Le rewrite in `vercel.json` mappano `/mcp` e `/mcp/:token` sulla function. Il server accetta il
+token da `Authorization: Bearer`, `x-api-key`, `x-auth-token`, dal path o da `?token=`.
+
+**Preferisci l'header:** un segreto nel path finisce nei log di richiesta. Il confronto è a tempo
+costante su digest SHA-256, il 401 risponde con `WWW-Authenticate` e non rivela nulla, e il server
+**si rifiuta di partire** senza `MCP_AUTH_TOKEN` (o con un token più corto di 24 caratteri):
+meglio un 500 che un endpoint aperto che scrive sul tuo account.
+
+Il token vale quanto la API key — chi lo ha legge e scrive sul tuo intervals.icu. Rotazione =
+cambio env var + redeploy. Per condividere il server con altri servirebbe OAuth vero, con il
+client_id da richiedere a david@intervals.icu.
+
+`npm test` copre i casi di autenticazione (token valido/errato/assente, le varie vie, rotta non
+confusa per token).
+
 ## Tool disponibili
 
 ### Lettura
