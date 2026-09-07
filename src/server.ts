@@ -12,8 +12,9 @@ export const SERVER_VERSION = "0.2.0";
 export const INSTRUCTIONS = `intervals.icu training data and workout planning.
 
 Read: list_activities / get_activity / get_activity_intervals for completed training,
-get_wellness for Fitness (CTL), Fatigue (ATL) and Form (TSB), get_athlete for thresholds, zones
-and device settings. Write: create_workout (or create_workouts for a whole week) puts structured
+get_activity_samples when the per-lap averages hide what you need and you must see the shape of
+one segment second by second, get_wellness for Fitness (CTL), Fatigue (ATL) and Form (TSB),
+get_athlete for thresholds, zones and device settings. Write: create_workout (or create_workouts for a whole week) puts structured
 workouts on the calendar, from where intervals.icu pushes them to the athlete's device.
 
 Conventions:
@@ -32,6 +33,10 @@ Conventions:
 - Writes land on the athlete's calendar and watch. Confirm before creating, moving or changing
   events, never delete one that was not explicitly named, and never change sport settings
   (thresholds, zones, load order) without asking first.
+- Work from averages first. get_activity_intervals answers most questions about how a session
+  was executed; reach for get_activity_samples only for a specific segment whose shape matters,
+  and slice it by interval number rather than by hand-computed seconds. A whole activity's
+  samples would fill the context window, so the tool caps each call at ~20 minutes.
 - Load and intensity are computed from whichever threshold is configured. When the data
   contradicts it — a pace far off threshold at near-threshold heart rate, for instance — say so
   instead of silently trusting either number.`;
