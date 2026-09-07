@@ -38,7 +38,9 @@ Two transports over one server definition:
 - `src/client.ts` — HTTP client. Basic auth (username is the literal `API_KEY`), athlete-id
   resolution and caching, error messages that name the likely cause.
 - `src/format.ts` — payload shaping. `Activity` has 183 fields and `Athlete` 158, so responses are
-  reduced to curated field sets and enriched with readable forms (pace, durations).
+  reduced to curated field sets and enriched with readable forms (pace, durations). Also owns the
+  stream allowlist (`STREAM_TYPES`), the documented exclusions (`SKIPPED_STREAM_TYPES`), the
+  `MAX_STREAM_SAMPLES` cap and `compactStreams` — see gotchas 9-13.
 - `src/tools/{athlete,activities,wellness,events}.ts` — each exports `register…Tools(server, client)`.
   Adding a tool means adding it there and calling the register function from `server.ts`.
 - `src/workout-syntax.ts` — the workout text format: a compact cheat sheet inlined into tool
@@ -88,6 +90,40 @@ These were all found empirically; don't rediscover them.
    esbuild, which does not do TypeScript's `.js` → `.ts` resolution, so a `../src/server.js`
    import fails at build time. That is why `tsconfig.json` has `declaration: true` (the `.d.ts`
    files give `api/` its types) and why `typecheck` builds before checking.
+9. **Streams cannot be sliced server-side, but three sibling endpoints can be.**
+   `GET /activity/{id}/streams{ext}` takes only `types` and `includeDefaults` — no window, no
+   resolution. So slicing happens in `compactStreams` after fetching the whole activity; the HTTP
+   payload is always full size and only the model payload shrinks. Meanwhile
+   `/activity/{id}/interval-stats`, `/best-efforts` and `/weather-summary` *do* accept
+   `start_index`/`end_index`, so the index window is the platform's own vocabulary — and for a
+   purely aggregate question `interval-stats` answers it server-side in one small response.
+10. **A 1Hz stream payload is enormous.** A 1h37m run returns 15 streams × 5,838 samples =
+    542KB; scaled to 2h that is ~670k characters, roughly 220k–330k tokens. Even the seven
+    allowlisted streams over 2h are ~55k–83k tokens. Hence the explicit `STREAM_TYPES`
+    allowlist (never `includeDefaults`) *and* the `MAX_STREAM_SAMPLES` cap — the filter alone is
+    not enough, a slice is mandatory. `SKIPPED_STREAM_TYPES` records why each of the other eight
+    is dropped, so the decision can be revisited without redoing the measurement.
+11. **`latlng` is one stream holding two series.** Latitude is in `data`, longitude in `data2`
+    (which is why `ActivityStream` has a `data2` field at all), and `valueTypeIsArray` is
+    `false` despite the name suggesting pairs. Reading it as an array of `[lat, lng]` silently
+    yields a list of latitudes. It is skipped anyway — the costliest stream and useless to a
+    model — but any future reader must handle the split.
+12. **Nulls and zeros both mean "no data", in different streams.** `stance_time`,
+    `vertical_oscillation`, `vertical_ratio` and `step_length` carry `null` mid-stream *even
+    when `allNull` is `false`*; `watts`, `cadence` and `torque` use `0` for the same condition.
+    So neither a null nor a zero proves the athlete stopped, and any per-sample maths must
+    filter before averaging.
+13. **Running cadence is per leg.** The stream reads 77 where the activity's `average_cadence`
+    is 92.88 — steps per minute is double that (~186 spm). `get_activity_samples` returns
+    `cadence_spm`, already doubled, rather than the raw value, because a plausible-looking
+    half-value is the kind of error nobody catches.
+14. **Stream windows are public in seconds, internal in indices.** `get_activity_samples` takes
+    `startTimeSeconds`/`endTimeSeconds` and resolves them through the activity's own `time`
+    stream (`sampleIndexForSecond`), because index == second only holds for a contiguous 1Hz
+    recording. A pause or smart recording desyncs them, and index arithmetic then returns the
+    wrong window silently. `time` is therefore not selectable at all: `SELECTABLE_STREAM_TYPES`
+    excludes it and `STREAM_TYPES` derives from it by prepending it, so it is always fetched and
+    always returned — it is the lookup table, not a choice.
 
 ## Secrets
 
