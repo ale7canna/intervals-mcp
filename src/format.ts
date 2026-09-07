@@ -123,6 +123,8 @@ const INTERVAL_FIELDS = [
   "group_id",
   "start_time",
   "end_time",
+  "start_index",
+  "end_index",
   "moving_time",
   "elapsed_time",
   "distance",
@@ -195,6 +197,112 @@ export function compactInterval(interval: unknown): Json {
   if (typeof base["average_speed"] === "number") base["avg_pace"] = formatPace(base["average_speed"]);
   if (typeof base["gap"] === "number") base["gap_pace"] = formatPace(base["gap"]);
   return base;
+}
+
+/**
+ * The data streams worth handing to a model, and the ones deliberately left out.
+ *
+ * A 2h activity at 1Hz is ~7200 samples per stream; all 15 streams the API returns come to
+ * roughly 670k characters, which no context window survives. So the set is an explicit
+ * allowlist — never `includeDefaults` — and even this one needs slicing (see MAX_STREAM_SAMPLES).
+ */
+/**
+ * The streams a caller may choose between.
+ *
+ * `time` is deliberately absent: it is always needed and always returned, being the lookup
+ * table that turns a second into a sample index and the axis any future downsampling would
+ * report against. Leaving it out of the choice removes the question.
+ */
+export const SELECTABLE_STREAM_TYPES = [
+  "heartrate",
+  "watts",
+  "velocity_smooth",
+  "cadence",
+  "altitude",
+  "distance",
+] as const;
+
+/** Everything the tool fetches and returns: the selectable streams plus the mandatory `time`. */
+export const STREAM_TYPES = ["time", ...SELECTABLE_STREAM_TYPES] as const;
+
+/**
+ * Streams the API offers that we skip, with the reason. Moving one into STREAM_TYPES above is
+ * all that is needed to enable it — kept here so the decision is visible rather than forgotten.
+ */
+export const SKIPPED_STREAM_TYPES: Record<string, string> = {
+  latlng: "GPS — latitude in `data`, longitude in `data2`. The costliest stream (~12%) and " +
+    "nothing a model can reason about. Route questions belong to /activity/{id}/map.",
+  fixed_altitude: "Elevation-corrected twin of `altitude` (204.0 vs 208.0 on the same sample). " +
+    "Duplicate at ~8%; `use_elevation_correction` on the activity says which one to trust.",
+  temp: "Device temperature, contaminated by body heat and sun on the watch. The activity's " +
+    "`average_temp` / `average_weather_temp` already cover heat stress.",
+  torque: "Nm — a cycling measure, derived and not meaningful for a run.",
+  stance_time: "Ground contact in ms. Useful per-second only for 'did form degrade late in the " +
+    "run'; `average_stance_time` covers the usual case. Contains interleaved nulls.",
+  step_length: "Stride in mm. Pairs with cadence to explain *how* a slowdown happened; " +
+    "`average_stride` covers the usual case. Contains interleaved nulls.",
+  vertical_oscillation: "Bounce in mm; `average_vertical_oscillation` covers it.",
+  vertical_ratio: "Oscillation as % of step length — derived from two streams we already skip.",
+};
+
+/** Refuse to return more than this many samples per stream; ~20 minutes at 1Hz. */
+export const MAX_STREAM_SAMPLES = 1200;
+
+/**
+ * Resolve a time offset in seconds to a sample index, using the activity's own `time` stream.
+ *
+ * Seconds are the public interface because they stay meaningful whatever the recording mode;
+ * sample indices are an internal detail. On a contiguous 1Hz recording the two coincide, but a
+ * paused or smart-recorded activity desyncs them, so never assume the identity — look it up.
+ * `mode: "end"` returns an exclusive bound: the first index strictly past `seconds`.
+ */
+export function sampleIndexForSecond(
+  time: unknown,
+  seconds: number,
+  mode: "start" | "end",
+): number {
+  const data = Array.isArray(time) ? time : [];
+  if (!data.length) return mode === "start" ? seconds : seconds + 1; // 1Hz fallback
+  for (let i = 0; i < data.length; i += 1) {
+    const t = data[i];
+    if (typeof t !== "number") continue;
+    if (mode === "start" ? t >= seconds : t > seconds) return i;
+  }
+  return data.length;
+}
+
+/**
+ * Reduce the raw stream array to the allowlisted types, sliced to [start, end).
+ *
+ * `data` holds one value per sample. Values may be null mid-stream even when `allNull` is
+ * false (the running-dynamics streams do this), and `watts` / `cadence` use 0 rather than null
+ * for the same missing-data condition — so neither absence nor zero proves anything.
+ */
+export function compactStreams(
+  raw: unknown,
+  start: number,
+  end: number,
+  types: readonly string[] = STREAM_TYPES,
+): Json {
+  const list = Array.isArray(raw) ? raw : [];
+  const wanted = new Set(types);
+  const out: Json = {};
+  for (const entry of list) {
+    if (!entry || typeof entry !== "object") continue;
+    const stream = entry as Json;
+    const type = String(stream["type"] ?? "");
+    if (!wanted.has(type)) continue;
+    const data = stream["data"];
+    if (!Array.isArray(data)) continue;
+    out[type] = data.slice(start, end);
+  }
+  return out;
+}
+
+/** Running cadence arrives per leg (77 while the activity averages 92.88); spm is double. */
+export function cadenceToSpm(data: unknown): unknown {
+  if (!Array.isArray(data)) return data;
+  return data.map((v) => (typeof v === "number" ? v * 2 : v));
 }
 
 /**
