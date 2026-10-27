@@ -83,6 +83,26 @@ Env var richieste sul server: `INTERVALS_API_KEY`, `MCP_AUTH_TOKEN`, opzionale
 `INTERVALS_ATHLETE_ID`. **La API key di intervals.icu resta lato server**: nel client finisce solo
 il token.
 
+### Più atleti sullo stesso deploy
+
+Ogni utente ha il suo token, e il token sceglie quale API key di intervals.icu serve la richiesta.
+Il nome lega token e key:
+
+```bash
+npm run token -- simone                              # stampa il token e i comandi da lanciare
+vercel env add MCP_USER_SIMONE_TOKEN production         # il token appena generato
+vercel env add MCP_USER_SIMONE_INTERVALS_KEY production # la API key di Simone
+vercel env add MCP_USER_SIMONE_ATHLETE_ID production    # opzionale, come INTERVALS_ATHLETE_ID
+vercel --prod                                           # le env var valgono dal deploy successivo
+```
+
+Simone usa `https://<deploy>/mcp/<suo token>` e vede solo il suo account. La coppia
+`MCP_AUTH_TOKEN` + `INTERVALS_API_KEY` resta valida come utente `default`, quindi gli URL già in uso
+non cambiano. Revocare un utente = cancellare le sue `MCP_USER_<NOME>_*` + redeploy. Il server
+**non parte** (500) se la configurazione è ambigua o incompleta: un token senza key o viceversa, un
+token sotto i 24 caratteri, due utenti con lo stesso token. Nei log compare solo il nome
+dell'utente, mai token o key.
+
 ### Due modi per autenticarsi, perché i client differiscono
 
 ```bash
@@ -103,15 +123,16 @@ token da `Authorization: Bearer`, `x-api-key`, `x-auth-token`, dal path o da `?t
 
 **Preferisci l'header:** un segreto nel path finisce nei log di richiesta. Il confronto è a tempo
 costante su digest SHA-256, il 401 risponde con `WWW-Authenticate` e non rivela nulla, e il server
-**si rifiuta di partire** senza `MCP_AUTH_TOKEN` (o con un token più corto di 24 caratteri):
+**si rifiuta di partire** senza alcun token configurato (o con un token più corto di 24 caratteri):
 meglio un 500 che un endpoint aperto che scrive sul tuo account.
 
-Il token vale quanto la API key — chi lo ha legge e scrive sul tuo intervals.icu. Rotazione =
-cambio env var + redeploy. Per condividere il server con altri servirebbe OAuth vero, con il
-client_id da richiedere a david@intervals.icu.
+Il token vale quanto la API key — chi lo ha legge e scrive su quell'account intervals.icu.
+Rotazione = cambio env var + redeploy. Chi gestisce il deploy custodisce le API key di tutti gli
+utenti: per un servizio aperto a sconosciuti servirebbe OAuth vero, con il client_id da richiedere
+a david@intervals.icu.
 
 `npm test` copre i casi di autenticazione (token valido/errato/assente, le varie vie, rotta non
-confusa per token).
+confusa per token, scelta dell'utente e configurazioni rotte).
 
 ## Il coach
 
