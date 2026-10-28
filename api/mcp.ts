@@ -11,7 +11,8 @@ import { buildServer } from "../dist/server.js";
  * between invocations — which is the only thing that works on serverless. `enableJsonResponse`
  * makes it answer with a single JSON response instead of an SSE stream.
  *
- * The intervals.icu API key stays here, server-side. Clients authenticate with MCP_AUTH_TOKEN.
+ * The intervals.icu API keys stay here, server-side. Clients present a per-user token, and the
+ * token selects whose key serves the request (see src/auth.ts).
  */
 export default async function handler(
   req: IncomingMessage & { body?: unknown },
@@ -34,15 +35,11 @@ export default async function handler(
     return;
   }
 
-  const apiKey = process.env["INTERVALS_API_KEY"];
-  if (!apiKey) {
-    sendError(res, 500, "INTERVALS_API_KEY is not configured on the server.");
-    return;
-  }
-
+  // The user name only, never the token or the key.
+  console.log(`mcp request: user=${auth.user.name}`);
   const client = new IntervalsClient({
-    apiKey,
-    athleteId: process.env["INTERVALS_ATHLETE_ID"],
+    apiKey: auth.user.intervalsKey,
+    athleteId: auth.user.athleteId,
   });
   const server = buildServer(client);
   const transport = new StreamableHTTPServerTransport({

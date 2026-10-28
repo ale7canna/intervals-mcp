@@ -11,7 +11,7 @@ npm run build       # tsc -> dist/ (dist/stdio.js is the stdio entrypoint)
 npm run typecheck   # builds first, then checks src + scripts + test + api
 npm test            # node:test via tsx — currently the HTTP auth logic
 npm run dev         # run from source with tsx
-npm run token       # generate MCP_AUTH_TOKEN for the remote deployment
+npm run token -- simone   # token for user SIMONE on the remote deployment (no name: MCP_AUTH_TOKEN)
 npm run smoke              # end-to-end read checks against the real API
 npm run smoke -- --write   # also create/verify/delete a test workout tomorrow
 python3 scripts/fitdump.py w.fit   # decode a workout FIT and show each step's target
@@ -31,10 +31,13 @@ Two transports over one server definition:
   gotcha 8.
 - `api/mcp.ts` — Vercel Node function: token auth, then a stateless Streamable HTTP transport
   (`sessionIdGenerator: undefined`, `enableJsonResponse: true`) built per request.
-- `src/auth.ts` — shared-secret check for the HTTP route. Accepts the token from
-  `Authorization: Bearer`, `x-api-key`, `x-auth-token`, the path (`/mcp/<token>`) or `?token=`,
-  because MCP clients differ in what they can send. Constant-time compare on SHA-256 digests;
-  refuses to serve at all when `MCP_AUTH_TOKEN` is unset or shorter than 24 chars.
+- `src/auth.ts` — per-user token check for the HTTP route; the matched user's intervals key
+  builds the client. Users are `MCP_USER_<NAME>_TOKEN` + `_INTERVALS_KEY` (+ optional
+  `_ATHLETE_ID`), plus the legacy `MCP_AUTH_TOKEN` + `INTERVALS_API_KEY` pair as `default`.
+  Accepts the token from `Authorization: Bearer`, `x-api-key`, `x-auth-token`, the path
+  (`/mcp/<token>`) or `?token=`, because MCP clients differ in what they can send. Constant-time
+  compare on SHA-256 digests against every user (no early exit); refuses to serve at all when no
+  user is configured, a token is under 24 chars, a token lacks its key or two users share one.
 - `src/client.ts` — HTTP client. Basic auth (username is the literal `API_KEY`), athlete-id
   resolution and caching, error messages that name the likely cause.
 - `src/format.ts` — payload shaping. `Activity` has 183 fields and `Athlete` 158, so responses are
